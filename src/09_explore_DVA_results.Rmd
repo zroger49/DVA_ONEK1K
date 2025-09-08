@@ -1,0 +1,873 @@
+---
+title: "09_explore_results"
+author: "Rogério Ribeiro"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Explore Results from the scRNA differential variability analysis
+
+# Load libraries
+```{r}
+shh <- suppressPackageStartupMessages
+
+shh(library(tidyverse))
+shh(library(ggrastr))
+shh(library(reshape2))
+shh(library(ComplexHeatmap))
+shh(library(RColorBrewer))
+shh(library(gridExtra))
+shh(library(ggrepel))
+```
+
+
+# Set image dir
+```{r}
+main.dir <-  "../../results/azimuth_annotation_results/"
+img.dir <- "../../results/azimuth_annotation_results/09_explore_DVA_results/"
+if (!dir.exists(img.dir)) {dir.create(img.dir)}
+```
+
+
+# Load data
+```{r}
+cts <- c("Bintermediate", "Bmemory", "Bnaive", "CD4CTL", "CD4Naive", 
+                "CD4Proliferating", "CD4TCM", "CD4TEM", "CD8Naive", "CD8Proliferating", 
+                "CD8TCM", "CD8TEM", "CD14Mono", "CD16Mono", "cDC2", "dnT", "Eryth", 
+                "gdT", "HSPC", "MAIT", "NK_CD56bright", "NK", "NKProliferating", 
+                "pDC", "Plasmablast", "Platelet", "Treg")
+
+
+cts_to_study <- c("Bintermediate", "Bmemory", "Bnaive", "CD4CTL", "CD4Naive", "CD4TCM", "CD4TEM", "CD8Naive", 
+                "CD8TCM", "CD8TEM", "CD14Mono", "CD16Mono","MAIT", "NK_CD56bright", "NK", "Treg")
+
+
+#cts_to_study <- c("CD4_NC", "CD8_ET", "CD8_NC", "NK")
+```
+
+## Load mean expression
+
+```{r}
+mean_exps <- list()
+for (ct in cts){
+  mean_exps[[ct]] <- read.table(paste0(main.dir, "03_mean_variance_estimates/", ct, "_cells_mean_mx.txt"))
+}
+
+```
+
+## Load dispersion estimates
+
+```{r}
+dispersions <- list()
+for (ct in cts){
+  dispersions[[ct]] <- read.table(paste0(main.dir, "04_individual_dispersions/", ct, "_within_ind_dispersion.txt"), header = TRUE)
+  row.names(dispersions[[ct]]) <- dispersions[[ct]]$gene
+  dispersions[[ct]]$gene <- NULL
+}
+```
+
+## Load DVG list
+
+```{r}
+DVGs <- readRDS(paste0(main.dir, "06_model_fit/1.DVG_results.rds")) # Open file
+DVGs <- lapply(DVGs, function(x) lapply(x, function(y) y %>% mutate(significance=ifelse(p_value_adj < 0.05, "sig", "not_sig"))))
+
+DVGs_new = list("age" = list(), 
+                "sex"  =  list()
+                )
+
+for (x in names(DVGs$age)){
+  if (x %in% cts_to_study){
+    DVGs_new$age[[x]] <- DVGs$age[[x]]
+    DVGs_new$sex[[x]] <- DVGs$sex[[x]]
+  }
+}
+
+DVGs <- DVGs_new
+```
+
+## Load sample size
+
+```{r}
+sample_size <- data.frame(
+  celltype = c("Bintermediate", "Bmemory", "Bnaive", "CD4CTL", "CD4Naive", 
+               "CD4Proliferating", "CD4TCM", "CD4TEM", "CD8Naive", "CD8Proliferating",
+               "CD8TCM", "CD8TEM", "CD14Mono", "CD16Mono", "cDC2", "dnT", "Eryth",
+               "gdT", "HSPC", "MAIT", "NK_CD56bright", "NK", "NKProliferating", "pDC",
+               "Plasmablast", "Platelet", "Treg"),
+  median = c(24, 20, 60, 7, 289, 1, 239, 21, 39, 1, 9, 150, 24, 11, 4, 3, 1, 3, 2, 9, 7, 154, 3, 2, 3, 2, 26)
+)
+
+sample_size <- sample_size %>% 
+  filter(celltype %in% cts_to_study)
+```
+
+
+## Load metadata
+
+```{r}
+metadata <- readRDS("../../data/donor_metadata.rds") %>%
+  mutate(sex = as.factor(Gender),
+         sample_id = assignment, 
+         age = Age) %>% 
+  select(sample_id, sex, age)
+```
+
+
+# Before filtering
+## Summarise the result
+
+```{r}
+# age 
+number_of_genes_age <- lapply(names(DVGs$age), function(x){
+    temp <- DVGs$age[[x]] %>% filter(significance == "sig")
+    data.frame("celltype" = x, "up" = sum(temp$beta > 0), "down" = sum(temp$beta < 0))
+  }
+)
+
+number_of_genes_age <- do.call("rbind", number_of_genes_age)
+df_melted_age <- melt(number_of_genes_age, id.vars = "celltype", variable.name = "direction", value.name = "count")
+
+
+# sex 
+number_of_genes_sex <- lapply(names(DVGs$sex), function(x){
+    temp <- DVGs$sex[[x]] %>% filter(significance == "sig")
+    data.frame("celltype" = x, "up" = sum(temp$beta > 0), "down" = sum(temp$beta < 0))
+  }
+)
+
+number_of_genes_sex <- do.call("rbind", number_of_genes_sex)
+df_melted_sex <- melt(number_of_genes_sex, id.vars = "celltype", variable.name = "direction", value.name = "count")
+
+```
+
+## Make an heatmap
+
+```{r, fig.height=8, fig.width=7}
+col = brewer.pal(9, "BuPu")[1:7]
+
+dat1 <- number_of_genes_age[,c(2:3)]
+dat2 <- number_of_genes_sex[,c(2:3)]
+
+row.names(dat1) <- number_of_genes_age[,1]
+row.names(dat2) <- number_of_genes_sex[,1]
+
+#n_counts <- sample_size$N
+median_cells <- sample_size$median
+celltypes <- sample_size$celltype
+
+dat1 <- dat1[celltypes,]
+dat2 <- dat2[celltypes,]
+
+# Create the heatmaps as you had before
+row_ha_left <- rowAnnotation(#`N subjects`= anno_barplot(n_counts, 
+                            #                   gp = gpar(fill = "blue"), 
+                            #                  width = unit(1, "cm"),  # Decreased width for the N barplot
+                            #                   border = TRUE), 
+                             `Median\ncell per\nsubject` = anno_barplot(median_cells, 
+                                                   gp = gpar(fill = "green"), 
+                                                   width = unit(1, "cm"),  # Decreased width for the Median barplot
+                                                   border = TRUE)
+                             )
+
+heatmap1 <- Heatmap(as.matrix(dat1),
+                    name = "DVG",               
+                    col = brewer.pal(9,"BuPu")[1:7],  
+                    cluster_rows = FALSE,      
+                    cluster_columns = FALSE,    
+                    show_column_names = TRUE,   
+                    show_row_names = FALSE,
+                    left_annotation = row_ha_left,
+                    column_title = "Age",
+                    cell_fun = function(j, i, x, y, width, height, fill) {
+                     grid.text(prettyNum(dat1[i, j], big.mark = ","), x, y, gp = gpar(fontsize = 10))}
+                    )
+
+heatmap2 <- Heatmap(as.matrix(dat2),
+                    name = "DVG",               
+                    col = brewer.pal(9,"BuPu")[1:7],  
+                    cluster_rows = FALSE,      
+                    cluster_columns = FALSE,    
+                    show_column_names = TRUE,   
+                    show_row_names = TRUE,
+                    column_title = "Sex",
+                    cell_fun = function(j, i, x, y, width, height, fill) {
+                     grid.text(prettyNum(dat2[i, j], big.mark = ","), x, y, gp = gpar(fontsize = 10))}
+                    )
+
+
+
+
+
+# Draw the combined heatmap with a gap between the elements
+draw(heatmap1 + heatmap2 , ht_gap = unit(1, "cm"))
+
+pdf(paste0(img.dir, "01_dvg_before_filtering.pdf"), height=6, width=5)
+draw(heatmap1 + heatmap2, ht_gap = unit(1, "cm"))
+dev.off()
+```
+
+## Plot histogram for p.value and betas
+
+```{r}
+complete_table_age <- do.call("rbind", lapply(names(DVGs$age), function(x) DVGs$age[[x]] %>% mutate(ct = x)))
+complete_table_sex <- do.call("rbind", lapply(names(DVGs$sex), function(x) DVGs$sex[[x]] %>% mutate(ct = x)))
+
+```
+
+### P.value for age
+
+```{r fig.height=8, fig.width=6}
+a <- ggplot(complete_table_age, aes(x = p_value)) +
+  geom_histogram(fill = "lightblue", colour = "grey30", binwidth = 0.01, show.legend = FALSE) +
+  geom_vline(xintercept = c(0.05), color = "red", linetype = "dashed", alpha = 0.5, size = 0.5) +
+  xlab(bquote("pvalue")) +
+  ylab("Counts") +
+  theme_bw() +
+  theme(strip.text = element_text(size = 12)) + 
+  ggtitle("Age") + 
+  facet_wrap(~ct, ncol = 2, scales = "free_y")
+
+
+a 
+
+pdf(paste0(img.dir, "01_pvalue.age.pdf"), height=22, width=16)
+print(a)
+dev.off()
+```
+
+### P.value for sex 
+
+```{r fig.height=8, fig.width=6}
+a <- ggplot(complete_table_sex, aes(x = p_value)) +
+  geom_histogram(fill = "lightblue", colour = "grey30", binwidth = 0.01, show.legend = FALSE) +
+  geom_vline(xintercept = c(0.05), color = "red", linetype = "dashed", alpha = 0.5, size = 0.5) +
+  xlab(bquote("pvalue")) +
+  ylab("Counts") +
+  theme_bw() +
+  theme(strip.text = element_text(size = 12)) + 
+  ggtitle("Sex") + 
+  facet_wrap(~ct, ncol = 2, scales = "free_y")
+
+
+a 
+
+pdf(paste0(img.dir, "01_pvalue.sex.pdf"), height=22, width=16)
+print(a)
+dev.off()
+```
+
+### Betas for age
+
+```{r fig.height=8, fig.width=6}
+a <- ggplot(complete_table_age, aes(x = beta, fill = significance)) +
+  geom_histogram(alpha = 0.5, binwidth = 0.001, show.legend = T, position = "identity") +
+  geom_vline(xintercept = c(0.05), color = "red", linetype = "dashed", alpha = 0.5, size = 0.5) +
+  xlab(bquote("Coefficient")) +
+  ylab("Counts") +
+  theme_bw() +
+  theme(strip.text = element_text(size = 12)) +
+  facet_wrap(~ct, ncol = 2, scales = "free_y")
+
+
+a 
+
+pdf(paste0(img.dir, "01_beta.age.pdf"), height=22, width=16)
+print(a)
+dev.off()
+```
+
+### Betas for sex
+
+```{r fig.height=8, fig.width=6}
+a <- ggplot(complete_table_sex, aes(x = beta, fill = significance)) +
+  geom_histogram(alpha = 0.5, binwidth = 0.01, show.legend = T, position = "identity") +
+  geom_vline(xintercept = c(0.05), color = "red", linetype = "dashed", alpha = 0.5, size = 0.5) +
+  xlab(bquote("Coefficient")) +
+  ylab("Counts") +
+  theme_bw() +
+  theme(strip.text = element_text(size = 12)) + 
+  facet_wrap(~ct, ncol = 2, scales = "free_y")
+
+
+a 
+
+pdf(paste0(img.dir, "01_beta.sex.pdf"), height=22, width=16)
+print(a)
+dev.off()
+```
+
+## Plot mean vs dispersion in significant genes (Fig. S12 from the Angli paper)
+
+```{r}
+color_scheme <- c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", 
+                  "#e6ab02", "#a6761d", "#666666", "#17becf", "#bcbd22", 
+                  "#ff9896", "#9467bd", "#8c564b", "#f781bf", "#8dd3c7", "#ffed6f")
+
+```
+
+### Age
+
+```{r}
+age_genes <- complete_table_age %>% filter(significance == "sig") 
+
+# Fetch means
+mean_expression_sig_genes_list <- lapply(names(table(age_genes$ct)), function(x){
+  sig_genes_ct <- age_genes %>% filter(ct == x)
+  mean_exps[[x]] %>% filter(row.names(.) %in% sig_genes_ct$gene)
+})
+
+# Fetch dispersions
+dispersions_sig_genes_list <- lapply(names(table(age_genes$ct)), function(x){
+  sig_genes_ct <- age_genes %>% filter(ct == x)
+  dispersions[[x]] %>% filter(row.names(.) %in% sig_genes_ct$gene)
+})
+
+# Create a list of data.frames 
+estimate_per_sig_genes_list <- lapply(1:length(names(table(age_genes$ct))), function(x){
+  c <- names(table(age_genes$ct))[x]
+  means <- rowMeans(mean_expression_sig_genes_list[[x]], na.rm = TRUE)
+  dispersion <- rowMeans(dispersions_sig_genes_list[[x]], na.rm = TRUE)
+  sig_genes_ct <- age_genes %>% filter(ct == c)
+
+  estimate_means_age <- data.frame("mean" = means, 
+                                   "dispersion" = dispersion, 
+                                   "signal" = ifelse(sig_genes_ct$beta < 0, "-", "+"), 
+                                   "ct" = c,
+                                   "gene" = names(dispersion)
+                                   )
+  
+  row.names(estimate_means_age) <- NULL
+  
+  estimate_means_age
+
+})
+
+estimate_per_sig_genes_age <- do.call("rbind", estimate_per_sig_genes_list)
+
+
+a <- ggplot(estimate_per_sig_genes_age, aes(x = log(mean, 10), y = dispersion, colour = ct)) + 
+  geom_point(size = 1) +  # Adjust point size and color
+  labs(
+    title = "Mean vs Dispersion",    # Add plot title
+    x = "Average log10(mean expression)",                      # X-axis label
+    y = "Average dispersion"                 # Y-axis label
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = color_scheme) +
+  theme(
+    plot.title = element_text(hjust = 0.5),  # Center the title
+    axis.title.x = element_text(margin = margin(t = 10)),  # Spacing below x-axis title
+    axis.title.y = element_text(margin = margin(r = 10))   # Spacing left of y-axis title
+  ) + 
+  ggtitle("Age") 
+
+a
+
+pdf(paste0(img.dir, "01_dispersions.age.pdf"), height=4, width=8)
+print(a)
+dev.off()
+```
+
+### Sex
+
+```{r}
+sex_genes <- complete_table_sex %>% filter(significance == "sig") 
+
+# Fetch means
+mean_expression_sig_genes_list <- lapply(names(table(sex_genes$ct)), function(x){
+  sig_genes_ct <- sex_genes %>% filter(ct == x)
+  mean_exps[[x]] %>% filter(row.names(.) %in% sig_genes_ct$gene)
+})
+
+# Fetch dispersions
+dispersions_sig_genes_list <- lapply(names(table(sex_genes$ct)), function(x){
+  sig_genes_ct <- sex_genes %>% filter(ct == x)
+  dispersions[[x]] %>% filter(row.names(.) %in% sig_genes_ct$gene)
+})
+
+# Create a list of data.frames 
+estimate_per_sig_genes_list <- lapply(1:length(names(table(sex_genes$ct))), function(x){
+  c <- names(table(sex_genes$ct))[x]
+  means <- rowMeans(mean_expression_sig_genes_list[[x]], na.rm = TRUE)
+  dispersion <- rowMeans(dispersions_sig_genes_list[[x]], na.rm = TRUE)
+  sig_genes_ct <- sex_genes %>% filter(ct == c)
+
+  estimate_means_sex <- data.frame("mean" = means, 
+                                   "dispersion" = dispersion, 
+                                   "signal" = ifelse(sig_genes_ct$beta < 0, "-", "+"), 
+                                   "ct" = c,
+                                   "gene" = names(dispersion)
+                                   )
+  
+  row.names(estimate_means_sex) <- NULL
+  
+  estimate_means_sex
+
+})
+
+estimate_per_sig_genes_sex <- do.call("rbind", estimate_per_sig_genes_list)
+
+
+
+a <- ggplot(estimate_per_sig_genes_sex, aes(x = log(mean, 10), y = dispersion, colour = ct)) + 
+  geom_point(size = 1) +  # Adjust point size and color
+  labs(
+    title = "Mean vs Dispersion",    # Add plot title
+    x = "Average log10(mean expression)",                      # X-axis label
+    y = "Average dispersion"                 # Y-axis label
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = color_scheme) +
+  theme(
+    plot.title = element_text(hjust = 0.5),  # Center the title
+    axis.title.x = element_text(margin = margin(t = 10)),  # Spacing below x-axis title
+    axis.title.y = element_text(margin = margin(r = 10))   # Spacing left of y-axis title
+  ) + 
+  ggtitle("Sex") 
+
+a
+
+pdf(paste0(img.dir, "01_dispersions.sex.pdf"), height=4, width=8)
+print(a)
+dev.off()
+```
+
+
+# Apply the expression filter to the data---- 
+
+```{r}
+filter_mean_ct <- c(10, 10, 5,30,1.5,2,10,5,30,2,10,30,30,30,2,10) #Manually selected based on the simulation
+names(filter_mean_ct) <- cts_to_study
+```
+
+
+## Filter using celltype specific filters
+```{r}
+#adjusted.pvalues are recomputed
+
+DVG.filter.age <- lapply(names(filter_mean_ct), function(x){
+  mean_per_gene <- rowMeans(mean_exps[[x]], na.rm = TRUE)
+  th <- filter_mean_ct[x]
+  genes_to_keep <- names(mean_per_gene[mean_per_gene >= th])
+  DVG_cell <- DVGs$age[[x]]
+  DVG_cell %>% 
+    filter(gene %in% genes_to_keep) %>% 
+    mutate(p_value_adj_filter = p.adjust(p_value, method = "BH"),
+           significance_after_filter = ifelse(p_value_adj_filter < 0.05, "sig", "non_sig"))
+})
+
+
+DVG.filter.sex <- lapply(names(filter_mean_ct), function(x){
+  mean_per_gene <- rowMeans(mean_exps[[x]], na.rm = TRUE)
+  th <- filter_mean_ct[x]
+  genes_to_keep <- names(mean_per_gene[mean_per_gene >= th])
+  DVG_cell <- DVGs$sex[[x]]
+  DVG_cell %>% 
+    filter(gene %in% genes_to_keep) %>% 
+    mutate(p_value_adj_filter = p.adjust(p_value, method = "BH"),
+           significance_after_filter = ifelse(p_value_adj_filter < 0.05, "sig", "non_sig"))
+})
+
+
+names(DVG.filter.sex) <- names(DVG.filter.age) <- names(filter_mean_ct)
+
+
+DVG.filter <- list()
+DVG.filter$age <- DVG.filter.age
+DVG.filter$sex <- DVG.filter.sex
+
+
+saveRDS(DVG.filter, paste0(img.dir, "/1.DVG_results.rds"))
+```
+
+
+## Apply the expression filter per group
+
+Due to some specific over dispersion in some groups, specially in sex, I can apply the mean threshold per group.
+
+```{r}
+# Prepare metadata to be use
+metadata_to_add <- metadata %>% 
+  mutate(age_group = ifelse(age < 40, "Y", "O")) %>% 
+  select(sample_id, sex, age_group)
+```
+
+
+```{r}
+
+DVG.group_filter.age <- lapply(names(filter_mean_ct), function(x){
+  mean_per_gene <- rowMeans(mean_exps[[x]], na.rm = TRUE)
+  
+  long_df <- mean_exps[[x]] %>%
+    mutate(gene = row.names(.)) %>%  # Add gene row numbers
+    pivot_longer(cols = 1:ncol(mean_exps[[x]]), names_to = "sample_id", values_to = "mean") %>% 
+    mutate(sample_id = gsub("X", "", sample_id)) %>%
+    merge(metadata_to_add, by = "sample_id")
+  
+  # Summarise the dataframe by age group
+  group_mean_age <- long_df %>% 
+    mutate(age_group = as.factor(age_group)) %>% 
+    group_by(age_group, gene) %>% 
+    summarise(group_mean = mean(mean))
+  
+  group_mean_age_filtered <- group_mean_age %>% 
+    filter(group_mean > filter_mean_ct[x])
+    
+  keep_genes <- names(table(group_mean_age_filtered$gene)[table(group_mean_age_filtered$gene) == 2])
+  
+  DVG_cell <- DVG.filter$age[[x]]
+  DVG_cell %>% 
+    filter(gene %in% keep_genes) %>% 
+    mutate(p_value_adj_group_filter = p.adjust(p_value, method = "BH"),
+           significance_after_group_filter = ifelse(p_value_adj_group_filter < 0.05, "sig", "non_sig"))
+})
+
+
+DVG.group_filter.sex <- lapply(names(filter_mean_ct), function(x){
+  mean_per_gene <- rowMeans(mean_exps[[x]], na.rm = TRUE)
+  
+  long_df <- mean_exps[[x]] %>%
+    mutate(gene = row.names(.)) %>%  # Add gene row numbers
+    pivot_longer(cols = 1:ncol(mean_exps[[x]]), names_to = "sample_id", values_to = "mean") %>% 
+    mutate(sample_id = gsub("X", "", sample_id)) %>%
+    merge(metadata_to_add, by = "sample_id")
+  
+
+  # Summarise the dataframe by sex 
+  group_mean_sex <- long_df %>% 
+    mutate(sex = as.factor(sex)) %>% 
+    group_by(sex, gene) %>% 
+    summarise(group_mean = mean(mean))
+
+  
+  group_mean_sex_filtered <- group_mean_sex %>% 
+    filter(group_mean > filter_mean_ct[x])
+    
+  keep_genes <- names(table(group_mean_sex_filtered$gene)[table(group_mean_sex_filtered$gene) == 2])
+  
+  DVG_cell <- DVG.filter$sex[[x]]
+  DVG_cell %>% 
+    filter(gene %in% keep_genes) %>% 
+    mutate(p_value_adj_group_filter = p.adjust(p_value, method = "BH"),
+           significance_after_group_filter = ifelse(p_value_adj_group_filter < 0.05, "sig", "non_sig"))
+})
+
+names(DVG.group_filter.age) <- names(DVG.group_filter.sex) <- cts_to_study
+
+
+DVG.group.filter <- list()
+DVG.group.filter$age <- DVG.group_filter.age
+DVG.group.filter$sex <- DVG.group_filter.sex
+
+
+saveRDS(DVG.group.filter, paste0(img.dir, "/1.DVG.group.filter.rds"))
+
+```
+
+## Summarise the result
+
+```{r}
+# age 
+number_of_genes_age <- lapply(names(DVG.group.filter$age), function(x){
+    temp <- DVG.group.filter$age[[x]] %>% filter(significance_after_group_filter == "sig")
+    data.frame("celltype" = x, "up" = sum(temp$beta > 0), "down" = sum(temp$beta < 0))
+  }
+)
+
+number_of_genes_age <- do.call("rbind", number_of_genes_age)
+df_melted_age <- melt(number_of_genes_age, id.vars = "celltype", variable.name = "direction", value.name = "count")
+
+
+# sex 
+number_of_genes_sex <- lapply(names(DVG.group.filter$sex), function(x){
+    temp <- DVG.group.filter$sex[[x]] %>% filter(significance_after_group_filter == "sig")
+    data.frame("celltype" = x, "up" = sum(temp$beta > 0), "down" = sum(temp$beta < 0))
+  }
+)
+
+number_of_genes_sex <- do.call("rbind", number_of_genes_sex)
+df_melted_sex <- melt(number_of_genes_sex, id.vars = "celltype", variable.name = "direction", value.name = "count")
+
+```
+
+## Make an heatmap
+
+```{r 01_results_after_group_filtering, fig.height=8, fig.width=7}
+col = brewer.pal(9, "BuPu")[1:7]
+
+dat1 <- number_of_genes_age[,c(2:3)]
+dat2 <- number_of_genes_sex[,c(2:3)]
+
+row.names(dat1) <- number_of_genes_age[,1]
+row.names(dat2) <- number_of_genes_sex[,1]
+
+#n_counts <- sample_size.filtered$N
+median_cells <- sample_size$median
+celltypes <- sample_size$celltype
+
+dat1 <- dat1[celltypes,]
+dat2 <- dat2[celltypes, ]
+
+# Create the heatmaps as you had before
+row_ha_left <- rowAnnotation(
+                            #`N subjects`= anno_barplot(n_counts, 
+                            #                   gp = gpar(fill = "blue"), 
+                            #                   width = unit(1, "cm"),  # Decreased width for the N barplot
+                            #                   border = TRUE), 
+                             `Median cell\nper subject` = anno_barplot(median_cells, 
+                                                   gp = gpar(fill = "green"), 
+                                                   width = unit(1, "cm"),  # Decreased width for the Median barplot
+                                                   border = TRUE)
+                             )
+
+heatmap1 <- Heatmap(as.matrix(dat1),
+                    name = "DVG",               
+                    col = brewer.pal(9,"BuPu")[1:7],  
+                    cluster_rows = FALSE,      
+                    cluster_columns = FALSE,    
+                    show_column_names = TRUE,   
+                    show_row_names = FALSE,
+                    left_annotation = row_ha_left,
+                    column_title = "Age",
+                    cell_fun = function(j, i, x, y, width, height, fill) {
+                     grid.text(prettyNum(dat1[i, j], big.mark = ","), x, y, gp = gpar(fontsize = 10))}
+                    )
+
+heatmap2 <- Heatmap(as.matrix(dat2),
+                    name = "DVG",               
+                    col = brewer.pal(9,"BuPu")[1:7],  
+                    cluster_rows = FALSE,      
+                    cluster_columns = FALSE,    
+                    show_column_names = TRUE,   
+                    show_row_names = TRUE,
+                    column_title = "Sex",
+                    cell_fun = function(j, i, x, y, width, height, fill) {
+                     grid.text(prettyNum(dat2[i, j], big.mark = ","), x, y, gp = gpar(fontsize = 10))}
+                    )
+
+
+
+
+
+# Draw the combined heatmap with a gap between the elements
+draw(heatmap1 + heatmap2 , ht_gap = unit(1, "cm"))
+
+pdf(paste0(img.dir, "02_dvg_after_group_filtering.pdf"), height=6, width=5)
+draw(heatmap1 + heatmap2, ht_gap = unit(1, "cm"))
+dev.off()
+```
+
+## Plot mean vs dispersion in significant genes (Fig. S12 from the Angli paper)
+
+```{r}
+#color_scheme <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728") 
+```
+
+```{r}
+complete_table_age.group_filter <- do.call("rbind", lapply(names(DVG.group.filter$age), function(x) DVG.group.filter$age[[x]] %>% mutate(ct = x)))
+complete_table_sex.group_filter <- do.call("rbind", lapply(names(DVG.group.filter$sex), function(x) DVG.group.filter$sex[[x]] %>% mutate(ct = x)))
+
+```
+
+
+### Age
+
+```{r}
+# Note: Keep in mind this will oVerwrite the variables that were used previously
+age_genes <- complete_table_age.group_filter %>% filter(significance_after_filter == "sig") 
+
+# Fetch means
+mean_expression_sig_genes_list <- lapply(names(table(age_genes$ct)), function(x){
+  sig_genes_ct <- age_genes %>% filter(ct == x)
+  mean_exps[[x]] %>% filter(row.names(.) %in% sig_genes_ct$gene)
+})
+
+# Fetch dispersions
+dispersions_sig_genes_list <- lapply(names(table(age_genes$ct)), function(x){
+  sig_genes_ct <- age_genes %>% filter(ct == x)
+  dispersions[[x]] %>% filter(row.names(.) %in% sig_genes_ct$gene)
+})
+
+# Create a list of data.frames 
+estimate_per_sig_genes_list <- lapply(1:length(names(table(age_genes$ct))), function(x){
+  c <- names(table(age_genes$ct))[x]
+  means <- rowMeans(mean_expression_sig_genes_list[[x]], na.rm = TRUE)
+  dispersion <- rowMeans(dispersions_sig_genes_list[[x]], na.rm = TRUE)
+  sig_genes_ct <- age_genes %>% filter(ct == c)
+
+  estimate_means_age <- data.frame("mean" = means, 
+                                   "dispersion" = dispersion, 
+                                   "signal" = ifelse(sig_genes_ct$beta < 0, "-", "+"), 
+                                   "ct" = c,
+                                   "gene" = names(dispersion)
+                                   )
+  
+  row.names(estimate_means_age) <- NULL
+  
+  estimate_means_age
+
+})
+
+estimate_per_sig_genes_age <- do.call("rbind", estimate_per_sig_genes_list)
+
+
+
+a <- ggplot(estimate_per_sig_genes_age, aes(x = log(mean, 10), y = dispersion, colour = ct)) + 
+  geom_point(size = 2) +  # Adjust point size and color
+  labs(
+    title = "Mean vs Dispersion",    # Add plot title
+    x = "Average log10(mean expression)",                      # X-axis label
+    y = "Average dispersion"                 # Y-axis label
+  ) +
+  theme_minimal() +
+  #scale_color_manual(values = color_scheme) +
+  theme(
+    plot.title = element_text(hjust = 0.5),  # Center the title
+    axis.title.x = element_text(margin = margin(t = 10)),  # Spacing below x-axis title
+    axis.title.y = element_text(margin = margin(r = 10))   # Spacing left of y-axis title
+  ) + 
+  ggtitle("Age") 
+
+a
+
+pdf(paste0(img.dir, "02_dispersions.age.pdf"), height=4, width=8)
+print(a)
+dev.off()
+```
+### Sex 
+
+```{r}
+sex_genes <- complete_table_sex.group_filter %>% filter(significance_after_filter == "sig") 
+
+# Fetch means
+mean_expression_sig_genes_list <- lapply(names(table(sex_genes$ct)), function(x){
+  sig_genes_ct <- sex_genes %>% filter(ct == x)
+  mean_exps[[x]] %>% filter(row.names(.) %in% sig_genes_ct$gene)
+})
+
+# Fetch dispersions
+dispersions_sig_genes_list <- lapply(names(table(sex_genes$ct)), function(x){
+  sig_genes_ct <- sex_genes %>% filter(ct == x)
+  dispersions[[x]] %>% filter(row.names(.) %in% sig_genes_ct$gene)
+})
+
+# Create a list of data.frames 
+estimate_per_sig_genes_list <- lapply(1:length(names(table(sex_genes$ct))), function(x){
+  c <- names(table(sex_genes$ct))[x]
+  means <- rowMeans(mean_expression_sig_genes_list[[x]], na.rm = TRUE)
+  dispersion <- rowMeans(dispersions_sig_genes_list[[x]], na.rm = TRUE)
+  sig_genes_ct <- sex_genes %>% filter(ct == c)
+
+  estimate_means_sex <- data.frame("mean" = means, 
+                                   "dispersion" = dispersion, 
+                                   "signal" = ifelse(sig_genes_ct$beta < 0, "-", "+"), 
+                                   "ct" = c,
+                                   "gene" = names(dispersion)
+                                   )
+  
+  row.names(estimate_means_sex) <- NULL
+  
+  estimate_means_sex
+
+})
+
+estimate_per_sig_genes_sex <- do.call("rbind", estimate_per_sig_genes_list)
+
+a <- ggplot(estimate_per_sig_genes_sex, aes(x = log(mean, 10), y = dispersion, colour = ct)) + 
+  geom_point(size = 2) +  # Adjust point size and color
+  labs(
+    title = "Mean vs Dispersion",    # Add plot title
+    x = "Average log10(mean expression)",                      # X-axis label
+    y = "Average dispersion"                 # Y-axis label
+  ) +
+  theme_minimal() +
+  #scale_color_manual(values = color_scheme) +
+  theme(
+    plot.title = element_text(hjust = 0.5),  # Center the title
+    axis.title.x = element_text(margin = margin(t = 10)),  # Spacing below x-axis title
+    axis.title.y = element_text(margin = margin(r = 10))   # Spacing left of y-axis title
+  ) + 
+  ggtitle("Sex") 
+
+a
+
+pdf(paste0(img.dir, "02_dispersions.sex.pdf"), height=4, width=8)
+print(a)
+dev.off()
+```
+
+## Comon genes (with the same directionality)
+
+```{r}
+color_palette <- c("#1f78b4", "#33a02c", "#e31a1c", "#ff7f00", "#6a3d9a", "#b15928", "#a6cee3")
+```
+
+
+```{r fig.height=5, fig.width=3}
+age.DVGs.group.filter <- do.call("rbind", lapply(names(DVG.group.filter$age), function(x) DVG.group.filter$age[[x]] %>% filter(significance_after_group_filter == "sig")))
+
+sex.DVGs.group.filter <- do.call("rbind", lapply(names(DVG.group.filter$sex), function(x) DVG.group.filter$sex[[x]] %>% filter(significance_after_group_filter == "sig")))
+
+
+celltypes_per_gene.age <- age.DVGs.group.filter %>%
+  group_by(gene) %>% 
+  summarise(n_ct = factor(n(), levels = c("1", "2", "3", "4", "5", "6")))
+
+celltypes_per_gene.sex <- sex.DVGs.group.filter %>%
+  group_by(gene) %>% 
+  summarise(n_ct = factor(n(), levels = c("1", "2", "3", "4", "5", "6", "8")))
+
+
+
+top.age <- celltypes_per_gene.age %>% 
+  filter(n_ct == "4")
+
+top.sex <- celltypes_per_gene.sex %>% 
+  filter(n_ct == "4")
+
+
+
+a <- ggplot(celltypes_per_gene.age, aes(y = n_ct, x = " ", color = n_ct)) + #aes(label = label) 
+  geom_jitter(width = .35, height = 0, size = 3, alpha=0.8) +
+  xlab("") + ylab("Number of Celltypes") +
+  scale_color_manual(name = "",values=color_palette) +
+  geom_text_repel(data=top.age, aes(y = n_ct, x =  " ", label=gene), col="black", size=4.5) + 
+  theme_bw() + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour = "black"),
+        axis.text.x= element_text(size = 13, colour = "black"),
+        axis.ticks.x=element_blank(), 
+        axis.text.y =  element_text(size = 18, colour = "black"), 
+        axis.title.x =  element_blank(),
+        axis.title.y =  element_text(size = 20, colour = "black"), 
+        legend.position = "none")
+
+b <- ggplot(celltypes_per_gene.sex, aes(y = n_ct, x = " ", color = n_ct)) + #aes(label = label) 
+  geom_jitter(width = .35, height = 0, size = 3, alpha=0.8) +
+  xlab("") + ylab("Number of Celltypes") +
+  scale_color_manual(name = "",values=color_palette) +
+  geom_text_repel(data=top.sex, aes(y = n_ct, x =  " ", label=gene), col="black", size=4.5) + 
+  theme_bw() + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour = "black"),
+        axis.text.x= element_text(size = 13, colour = "black"),
+        axis.ticks.x=element_blank(), 
+        axis.text.y =  element_text(size = 18, colour = "black"), 
+        axis.title.x =  element_blank(),
+        axis.title.y =  element_text(size = 20, colour = "black"), 
+        legend.position = "none")
+
+
+print(a)
+print(b)
+
+
+pdf(paste0(img.dir, "03_common_genes_across_celltypes.pdf"), height=4, width=5)
+ggpubr::ggarrange(a,b)
+dev.off()
+```

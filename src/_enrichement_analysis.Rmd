@@ -1,0 +1,775 @@
+---
+title: "09_enrichement_results"
+author: "Rogério Ribeiro"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Load libraries
+
+```{r}
+suppressPackageStartupMessages(library(tidyverse))
+library(ggpubr)
+library(DOSE)
+```
+
+# Make out dir
+
+```{r}
+#out.dir <- "../../results/azimuth_annotation_results/_enrichement/"
+```
+
+# Load data
+
+```{r}
+enrichement_age <- readRDS("../../results/azimuth_annotation_results/_enrichement/enrichements_age.rds")
+enrichement_sex <- readRDS("../../results/azimuth_annotation_results/_enrichement/enrichements_sex.rds")
+
+enrichement_M <- readRDS("../../results/azimuth_annotation_results/_enrichement/enrichements_age_stratified_M.rds")
+enrichement_Fe <- readRDS("../../results/azimuth_annotation_results/_enrichement/enrichements_age_stratified_Fe.rds")
+
+
+```
+
+# Set pallete
+
+```{r}
+safe_colorblind_palette <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733", "#332288", "#AA4499", 
+                             "#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#888888")
+```
+
+# Summarise the results across celltypes
+
+Set function
+
+```{r}
+summarise_enrichement <- function(object, ont, FDR){
+  if (!ont %in% names(object)){
+    return (NULL)
+  }
+  data <- object[[ont]]@result
+  data$ontology <- ont
+  data %>% filter(p.adjust < FDR)
+}
+```
+
+## Age
+
+```{r}
+# Summarise BP (Biological Process) enrichment
+age.bp.up <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "BP_up", FDR = 0.05)))
+age.bp.down <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "BP_down", FDR = 0.05)))
+age.bp <- rbind(age.bp.up, age.bp.down)
+
+# Summarise MF (Molecular Function) enrichment
+age.mf.up <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "MF_up", FDR = 0.05)))
+age.mf.down <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "MF_down", FDR = 0.05)))
+age.mf <- rbind(age.mf.up, age.mf.down)
+
+# Summarise CC (Cellular Component) enrichment
+age.cc.up <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "CC_up", FDR = 0.05)))
+age.cc.down <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "CC_down", FDR = 0.05)))
+age.cc <- rbind(age.cc.up, age.cc.down)
+
+# Summarise KEGG pathway enrichment
+age.kegg.up <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "kegg_up", FDR = 0.05)))
+age.kegg.down <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "kegg_down", FDR = 0.05)))
+age.kegg <- rbind(age.kegg.up, age.kegg.down)
+
+# Summarise DO (Disease Ontology) enrichment
+age.do.up <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "do_up", FDR = 0.05)))
+age.do.down <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "do_down", FDR = 0.05)))
+age.do <- rbind(age.do.up, age.do.down)
+
+# Summarise DNG (Drug Ontology) enrichment
+age.dng.up <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "dng_up", FDR = 0.05)))
+age.dng.down <- do.call("rbind", lapply(enrichement_age, function(x) summarise_enrichement(x, "dng_down", FDR = 0.05)))
+age.dng <- rbind(age.dng.up, age.dng.down)
+```
+
+## Sex
+
+```{r}
+# Summarise BP (Biological Process) enrichment
+sex.bp.up <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "BP_up", FDR = 0.05)))
+sex.bp.down <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "BP_down", FDR = 0.05)))
+sex.bp <- rbind(sex.bp.up, sex.bp.down)
+
+# Summarise MF (Molecular Function) enrichment
+sex.mf.up <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "MF_up", FDR = 0.05)))
+sex.mf.down <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "MF_down", FDR = 0.05)))
+sex.mf <- rbind(sex.mf.up, sex.mf.down)
+
+# Summarise CC (Cellular Component) enrichment
+sex.cc.up <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "CC_up", FDR = 0.05)))
+sex.cc.down <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "CC_down", FDR = 0.05)))
+sex.cc <- rbind(sex.cc.up, sex.cc.down)
+
+# Summarise KEGG pathway enrichment
+sex.kegg.up <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "kegg_up", FDR = 0.05)))
+sex.kegg.down <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "kegg_down", FDR = 0.05)))
+sex.kegg <- rbind(sex.kegg.up, sex.kegg.down)
+
+# Summarise DO (Disease Ontology) enrichment
+sex.do.up <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "do_up", FDR = 0.05)))
+sex.do.down <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "do_down", FDR = 0.05)))
+sex.do <- rbind(sex.do.up, sex.do.down)
+
+# Summarise DNG (Drug Ontology) enrichment
+sex.dng.up <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "dng_up", FDR = 0.05)))
+sex.dng.down <- do.call("rbind", lapply(enrichement_sex, function(x) summarise_enrichement(x, "dng_down", FDR = 0.05)))
+sex.dng <- rbind(sex.dng.up, sex.dng.down)
+```
+
+# Summarise the results with a table
+
+## Age
+
+```{r fig.height=10, fig.width=15}
+# Biological process 
+celltypes <- do.call("c", lapply(row.names(age.bp), function(x) str_split(x, "\\.")[[1]][1]))
+age.bp$ct <- celltypes
+
+p1 <- ggplot(age.bp, aes(y = ct, x = Description, color = ontology)) +
+  geom_point(size = 4) +
+  scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+  theme_dose(10) +
+  xlab("") + ylab("") + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+        axis.text.y = element_text(size = 16), 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 22), 
+        legend.position = "top", 
+        legend.direction="horizontal")
+
+# MOlecular function
+celltypes <- do.call("c", lapply(row.names(age.mf), function(x) str_split(x, "\\.")[[1]][1]))
+age.mf$ct <- celltypes
+
+p2 <- ggplot(age.mf, aes(y = ct, x = Description, color = ontology)) +
+  geom_point(size = 4) +
+  scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+  theme_dose(10) +
+  xlab("") + ylab("") + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+        axis.text.y = element_text(size = 16), 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 22), 
+        legend.position = "top", 
+        legend.direction="horizontal")
+
+
+# Cellular component 
+celltypes <- do.call("c", lapply(row.names(age.cc), function(x) str_split(x, "\\.")[[1]][1]))
+age.cc$ct <- celltypes
+
+p3 <- ggplot(age.cc, aes(y = ct, x = Description, color = ontology)) +
+  geom_point(size = 4) +
+  scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+  theme_dose(10) +
+  xlab("") + ylab("") + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+        axis.text.y = element_text(size = 16), 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 22), 
+        legend.position = "top", 
+        legend.direction="horizontal")
+
+# KEGG
+celltypes <- do.call("c", lapply(row.names(age.kegg), function(x) str_split(x, "\\.")[[1]][1]))
+age.kegg$ct <- celltypes
+
+p4 <- ggplot(age.kegg, aes(y = ct, x = Description, color = ontology)) +
+  geom_point(size = 4) +
+  scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+  theme_dose(10) +
+  xlab("") + ylab("") + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+        axis.text.y = element_text(size = 16), 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 22), 
+        legend.position = "top", 
+        legend.direction="horizontal")
+# 
+# # Disease Ontology
+# celltypes <- do.call("c", lapply(row.names(age.do), function(x) str_split(x, "\\.")[[1]][1]))
+# age.do$ct <- celltypes
+# 
+# p5 <- ggplot(age.do, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+
+# Disease Network
+celltypes <- do.call("c", lapply(row.names(age.dng), function(x) str_split(x, "\\.")[[1]][1]))
+age.dng$ct <- celltypes
+
+p6 <- ggplot(age.dng, aes(y = ct, x = Description, color = ontology)) +
+  geom_point(size = 4) +
+  scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+  theme_dose(10) +
+  xlab("") + ylab("") + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+        axis.text.y = element_text(size = 16), 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 22), 
+        legend.position = "top", 
+        legend.direction="horizontal")
+
+
+
+
+print(p1)
+print(p2)
+print(p3)
+print(p4)
+#print(p5)
+print(p6)
+```
+
+```{r}
+
+pdf("../../results/azimuth_annotation_results/_enrichement/images/bp.enrich.age.pdf")
+p1
+dev.off()
+
+
+pdf("../../results//azimuth_annotation_results/_enrichement/images/mf.enrich.age.pdf", h = 10)
+p2
+dev.off()
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/cc.enrich.age.pdf", w = 8)
+p3
+dev.off()
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/KEGG.enrich.age.pdf", w = 8)
+p4
+dev.off()
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/DNG.enrich.age.pdf", w = 16, h = 12)
+p6
+dev.off()
+
+```
+
+## Sex
+
+```{r fig.height=10, fig.width=15}
+# Biological process 
+celltypes <- do.call("c", lapply(row.names(sex.bp), function(x) str_split(x, "\\.")[[1]][1]))
+sex.bp$ct <- celltypes
+# 
+# p1 <- ggplot(sex.bp, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+
+# MOlecular function
+celltypes <- do.call("c", lapply(row.names(sex.mf), function(x) str_split(x, "\\.")[[1]][1]))
+sex.mf$ct <- celltypes
+
+p2 <- ggplot(sex.mf, aes(y = ct, x = Description, color = ontology)) +
+  geom_point(size = 4) +
+  scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+  theme_dose(10) +
+  xlab("") + ylab("") + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+        axis.text.y = element_text(size = 16), 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 22), 
+        legend.position = "top", 
+        legend.direction="horizontal")
+
+
+# Cellular component 
+celltypes <- do.call("c", lapply(row.names(sex.cc), function(x) str_split(x, "\\.")[[1]][1]))
+sex.cc$ct <- celltypes
+
+p3 <- ggplot(sex.cc, aes(y = ct, x = Description, color = ontology)) +
+  geom_point(size = 4) +
+  scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+  theme_dose(10) +
+  xlab("") + ylab("") + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+        axis.text.y = element_text(size = 16), 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 22), 
+        legend.position = "top", 
+        legend.direction="horizontal")
+
+# KEGG
+celltypes <- do.call("c", lapply(row.names(sex.kegg), function(x) str_split(x, "\\.")[[1]][1]))
+sex.kegg$ct <- celltypes
+
+p4 <- ggplot(sex.kegg, aes(y = ct, x = Description, color = ontology)) +
+  geom_point(size = 4) +
+  scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+  theme_dose(10) +
+  xlab("") + ylab("") + 
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+        axis.text.y = element_text(size = 16), 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 22), 
+        legend.position = "top", 
+        legend.direction="horizontal")
+
+# Disease Ontology
+celltypes <- do.call("c", lapply(row.names(sex.do), function(x) str_split(x, "\\.")[[1]][1]))
+sex.do$ct <- celltypes
+# 
+# p5 <- ggplot(sex.do, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+
+# Disease Network
+celltypes <- do.call("c", lapply(row.names(sex.dng), function(x) str_split(x, "\\.")[[1]][1]))
+sex.dng$ct <- celltypes
+
+# p6 <- ggplot(sex.dng, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+
+
+
+
+#print(p1)
+print(p2)
+print(p3)
+print(p4)
+#print(p5)
+#print(p6)
+```
+
+```{r}
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/bp.enrich.sex.pdf")
+p1
+dev.off()
+
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/mf.enrich.sex.pdf", h = 10)
+p2
+dev.off()
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/cc.enrich.sex.pdf", w = 8)
+p3
+dev.off()
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/KEGG.enrich.sex.pdf", w = 8)
+p4
+dev.off()
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/DO.enrich.sex.pdf", w = 8)
+#p5
+dev.off()
+
+pdf("../../results/azimuth_annotation_results/_enrichement//images/DNG.enrich.sex.pdf", w = 16, h = 12)
+p6
+dev.off()
+
+```
+
+
+
+# Repeat for stratified results in age (by sex)
+## Summarise the results across celltypes
+
+## Male
+
+```{r}
+# Summarise BP (Biological Process) enrichment
+M.bp.up <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "BP_up", FDR = 0.05)))
+M.bp.down <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "BP_down", FDR = 0.05)))
+M.bp <- rbind(M.bp.up, M.bp.down)
+
+# Summarise MF (Molecular Function) enrichment
+M.mf.up <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "MF_up", FDR = 0.05)))
+M.mf.down <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "MF_down", FDR = 0.05)))
+M.mf <- rbind(M.mf.up, M.mf.down)
+
+# Summarise CC (Cellular Component) enrichment
+M.cc.up <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "CC_up", FDR = 0.05)))
+M.cc.down <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "CC_down", FDR = 0.05)))
+M.cc <- rbind(M.cc.up, M.cc.down)
+
+# Summarise KEGG pathway enrichment
+M.kegg.up <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "kegg_up", FDR = 0.05)))
+M.kegg.down <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "kegg_down", FDR = 0.05)))
+M.kegg <- rbind(M.kegg.up, M.kegg.down)
+
+# Summarise DO (Disease Ontology) enrichment
+M.do.up <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "do_up", FDR = 0.05)))
+M.do.down <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "do_down", FDR = 0.05)))
+M.do <- rbind(M.do.up, M.do.down)
+
+# Summarise DNG (Drug Ontology) enrichment
+M.dng.up <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "dng_up", FDR = 0.05)))
+M.dng.down <- do.call("rbind", lapply(enrichement_M, function(x) summarise_enrichement(x, "dng_down", FDR = 0.05)))
+M.dng <- rbind(M.dng.up, M.dng.down)
+```
+
+## Females
+
+```{r}
+# Summarise BP (Biological Process) enrichment
+F.bp.up <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "BP_up", FDR = 0.05)))
+F.bp.down <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "BP_down", FDR = 0.05)))
+F.bp <- rbind(F.bp.up, F.bp.down)
+
+# Summarise MF (Molecular Function) enrichment
+F.mf.up <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "MF_up", FDR = 0.05)))
+F.mf.down <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "MF_down", FDR = 0.05)))
+F.mf <- rbind(F.mf.up, F.mf.down)
+
+# Summarise CC (Cellular Component) enrichment
+F.cc.up <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "CC_up", FDR = 0.05)))
+F.cc.down <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "CC_down", FDR = 0.05)))
+F.cc <- rbind(F.cc.up, F.cc.down)
+
+# Summarise KEGG pathway enrichment
+F.kegg.up <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "kegg_up", FDR = 0.05)))
+F.kegg.down <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "kegg_down", FDR = 0.05)))
+F.kegg <- rbind(F.kegg.up, F.kegg.down)
+
+# Summarise DO (Disease Ontology) enrichment
+F.do.up <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "do_up", FDR = 0.05)))
+F.do.down <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "do_down", FDR = 0.05)))
+F.do <- rbind(F.do.up, F.do.down)
+
+# Summarise DNG (Drug Ontology) enrichment
+F.dng.up <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "dng_up", FDR = 0.05)))
+F.dng.down <- do.call("rbind", lapply(enrichement_Fe, function(x) summarise_enrichement(x, "dng_down", FDR = 0.05)))
+F.dng <- rbind(F.dng.up, F.dng.down)
+```
+
+# Summarise the results with a table
+
+## Males
+
+Note: There no enrichements here
+
+```{r fig.height=10, fig.width=15}
+# Biological process 
+# celltypes <- do.call("c", lapply(row.names(M.bp), function(x) str_split(x, "\\.")[[1]][1]))
+# M.bp$ct <- celltypes
+# 
+# # p1 <- ggplot(M.bp, aes(y = ct, x = Description, color = ontology)) +
+# #   geom_point(size = 4) +
+# #   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+# #   theme_dose(10) +
+# #   xlab("") + ylab("") + 
+# #   theme(panel.background = element_blank(),
+# #         panel.grid.major = element_blank(), 
+# #         panel.grid.minor = element_blank(),
+# #         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+# #         axis.text.y = element_text(size = 16), 
+# #         legend.title = element_blank(), 
+# #         legend.text = element_text(size = 22), 
+# #         legend.position = "top", 
+# #         legend.direction="horizontal")
+# 
+# # MOlecular function
+# celltypes <- do.call("c", lapply(row.names(M.mf), function(x) str_split(x, "\\.")[[1]][1]))
+# M.mf$ct <- celltypes
+# 
+# p2 <- ggplot(M.mf, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+# 
+# 
+# # Cellular component 
+# celltypes <- do.call("c", lapply(row.names(M.cc), function(x) str_split(x, "\\.")[[1]][1]))
+# M.cc$ct <- celltypes
+# 
+# p3 <- ggplot(M.cc, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+# 
+# # KEGG
+# celltypes <- do.call("c", lapply(row.names(M.kegg), function(x) str_split(x, "\\.")[[1]][1]))
+# M.kegg$ct <- celltypes
+# 
+# p4 <- ggplot(M.kegg, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+# 
+# # Disease Ontology
+# celltypes <- do.call("c", lapply(row.names(M.do), function(x) str_split(x, "\\.")[[1]][1]))
+# M.do$ct <- celltypes
+# 
+# p5 <- ggplot(M.do, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") +
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1),
+#         axis.text.y = element_text(size = 16),
+#         legend.title = element_blank(),
+#         legend.text = element_text(size = 22),
+#         legend.position = "top",
+#         legend.direction="horizontal")
+# 
+# # Disease Network
+# celltypes <- do.call("c", lapply(row.names(M.dng), function(x) str_split(x, "\\.")[[1]][1]))
+# M.dng$ct <- celltypes
+# 
+# p6 <- ggplot(M.dng, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+# 
+# 
+# 
+# 
+# print(p1)
+# print(p2)
+# print(p3)
+# print(p4)
+# print(p5)
+# print(p6)
+```
+
+No Plots here, since there is no enrichment
+
+## Female
+
+```{r fig.height=10, fig.width=15}
+# Biological process 
+# celltypes <- do.call("c", lapply(row.names(F.bp), function(x) str_split(x, "\\.")[[1]][1]))
+# F.bp$ct <- celltypes
+# 
+# p1 <- ggplot(F.bp, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") +
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1),
+#         axis.text.y = element_text(size = 16),
+#         legend.title = element_blank(),
+#         legend.text = element_text(size = 22),
+#         legend.position = "top",
+#         legend.direction="horizontal")
+# 
+# # MOlecular function
+# celltypes <- do.call("c", lapply(row.names(F.mf), function(x) str_split(x, "\\.")[[1]][1]))
+# F.mf$ct <- celltypes
+# 
+# p2 <- ggplot(F.mf, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+# 
+# 
+# # Cellular component 
+# celltypes <- do.call("c", lapply(row.names(F.cc), function(x) str_split(x, "\\.")[[1]][1]))
+# F.cc$ct <- celltypes
+# 
+# p3 <- ggplot(F.cc, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+# 
+# # KEGG
+# celltypes <- do.call("c", lapply(row.names(F.kegg), function(x) str_split(x, "\\.")[[1]][1]))
+# F.kegg$ct <- celltypes
+# 
+# p4 <- ggplot(F.kegg, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") + 
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1), 
+#         axis.text.y = element_text(size = 16), 
+#         legend.title = element_blank(), 
+#         legend.text = element_text(size = 22), 
+#         legend.position = "top", 
+#         legend.direction="horizontal")
+# 
+# # Disease Ontology
+# celltypes <- do.call("c", lapply(row.names(F.do), function(x) str_split(x, "\\.")[[1]][1]))
+# F.do$ct <- celltypes
+# # 
+# p5 <- ggplot(F.do, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") +
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1),
+#         axis.text.y = element_text(size = 16),
+#         legend.title = element_blank(),
+#         legend.text = element_text(size = 22),
+#         legend.position = "top",
+#         legend.direction="horizontal")
+# 
+# # Disease Network
+# celltypes <- do.call("c", lapply(row.names(F.dng), function(x) str_split(x, "\\.")[[1]][1]))
+# F.dng$ct <- celltypes
+# 
+# p6 <- ggplot(F.dng, aes(y = ct, x = Description, color = ontology)) +
+#   geom_point(size = 4) +
+#   scale_color_manual(name = "Gene Set", values = safe_colorblind_palette[c(2,1)]) +
+#   theme_dose(10) +
+#   xlab("") + ylab("") +
+#   theme(panel.background = element_blank(),
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank(),
+#         axis.text.x = element_text(size = 14, angle = 80, hjust = 1, vjust = 1),
+#         axis.text.y = element_text(size = 16),
+#         legend.title = element_blank(),
+#         legend.text = element_text(size = 22),
+#         legend.position = "top",
+#         legend.direction="horizontal")
+# 
+# 
+# 
+# 
+# print(p1)
+# print(p2)
+# print(p3)
+# print(p4)
+# print(p5)
+# print(p6)
+```
+
+Same for females

@@ -1,0 +1,412 @@
+---
+title: "17_explore_results_cell_permutations"
+author: "Rogério Ribeiro"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Explore Results from the scRNA differential variability analysis
+
+# Load libraries
+```{r}
+
+library(tidyverse)
+library(ggrastr)
+library(reshape2)
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(gridExtra)
+library(ggrepel)
+library(ggpubr)
+```
+
+
+# Set image dir
+```{r}
+img.dir <- "../../results/azimuth_annotation_results/permutation_results_exploration/"
+if (!dir.exists(img.dir)) {dir.create(img.dir)}
+```
+
+
+
+# Load data
+```{r}
+cts <- c(
+  "Bintermediate", "Bmemory", "Bnaive", 
+  "CD14Mono", "CD16Mono", "CD4CTL", "CD4Naive", 
+  "CD4Proliferating", "CD4TCM", "CD4TEM", 
+  "CD8Naive", "CD8Proliferating", "CD8TCM", "CD8TEM", 
+  "Eryth", "HSPC", "MAIT", 
+  "NKProliferating", "NK_CD56bright", "NK", 
+  "Plasmablast", "Platelet", "Treg", 
+  "cDC2", "dnT", "gdT", "pDC"
+)
+
+cts_to_study <- c("Bintermediate", "Bmemory", "Bnaive", "CD4CTL", "CD4Naive", "CD4TCM", "CD4TEM", "CD8Naive", 
+                "CD8TCM", "CD8TEM", "CD14Mono", "CD16Mono","MAIT", "NK_CD56bright", "NK", "Treg")
+
+```
+
+
+## Load mean expression
+
+
+```{r}
+mean_exps <- list()
+for (ct in cts){
+  mean_exps[[ct]] <- read.table(paste0("../../results/azimuth_annotation_results/03_mean_variance_estimates/", ct, "_cells_mean_mx.txt"))
+}
+
+```
+
+## Load dispersion estimates
+
+```{r}
+dispersions <- list()
+for (ct in cts){
+  dispersions[[ct]] <- read.table(paste0("../../results/azimuth_annotation_results/04_individual_dispersions/", ct, "_within_ind_dispersion.txt"), header = TRUE)
+  row.names(dispersions[[ct]]) <- dispersions[[ct]]$gene
+  dispersions[[ct]]$gene <- NULL
+}
+```
+
+## Load DVG list
+
+```{r}
+list_of_permutations <- list()
+for (i in 1:10){
+  DVGs <- readRDS(paste0("../../results/azimuth_annotation_results/17_model_fit_combined/", i, ".DVG_results.rds")) # Open file
+  DVGs <- lapply(DVGs, function(x) lapply(x, function(y) y %>% mutate(significance=ifelse(p_value_adj < 0.05, "sig", "not_sig"))))
+  
+  # Remove platelets and Erythrocytes
+  DVGs$age$Platelets <- NULL
+  DVGs$sex$Platelets <- NULL
+  
+  DVGs$age$Erythrocytes <- NULL
+  DVGs$sex$Erythrocytes <- NULL  
+  list_of_permutations[[i]] <- DVGs
+}
+```
+
+# Load Analysis results
+```{r}
+DVGs <- readRDS("../../results/azimuth_annotation_results/06_model_fit/1.DVG_results.rds") # 
+DVGs <- lapply(DVGs, function(x) lapply(x, function(y) y %>% mutate(significance=ifelse(p_value_adj < 0.05, "sig", "not_sig"))))
+  
+# Remove platelets and Erythrocytes
+DVGs$age$Platelets <- NULL
+DVGs$sex$Platelets <- NULL
+
+DVGs$age$Erythrocytes <- NULL
+DVGs$sex$Erythrocytes <- NULL  
+```
+
+
+
+# Before filtering
+## Count the number of differential expressed genes in each iteration for each celltype
+```{r}
+# age
+number_genes_age_across_permutations <- list()
+for (i in 1:10){
+  results <- list_of_permutations[[i]]
+  number_of_genes_age <- lapply(names(results$age), function(x){
+      temp <- results$age[[x]] %>% filter(significance == "sig")
+      data.frame("celltype" = x, "genes" = nrow(temp), "iter" = i)
+    }
+  )
+
+  number_genes_age_across_permutations[[i]] <- do.call("rbind", number_of_genes_age)
+}
+
+number_genes_age_across_permutations <- do.call("rbind",number_genes_age_across_permutations)
+
+
+number_of_genes_age_analysis <- lapply(names(DVGs$age), function(x){
+      temp <- DVGs$age[[x]] %>% filter(significance == "sig")
+      data.frame("celltype" = x, "genes" = nrow(temp), "iter" = "Analysis")
+  }
+)
+
+number_of_genes_age_analysis <- do.call("rbind", number_of_genes_age_analysis)
+
+number_genes_age_across_permutations <- rbind(number_genes_age_across_permutations, number_of_genes_age_analysis)
+
+number_genes_age_across_permutations$type <- ifelse(number_genes_age_across_permutations$iter ==  "Analysis", "real", "simulation")
+
+
+# Sex
+number_genes_sex_across_permutations <- list()
+for (i in 1:10){
+  results <- list_of_permutations[[i]]
+  number_of_genes_sex <- lapply(names(results$sex), function(x){
+      temp <- results$sex[[x]] %>% filter(significance == "sig")
+      data.frame("celltype" = x, "genes" = nrow(temp), "iter" = i)
+    }
+  )
+
+  number_genes_sex_across_permutations[[i]] <- do.call("rbind", number_of_genes_sex)
+}
+
+number_genes_sex_across_permutations <- do.call("rbind",number_genes_sex_across_permutations)
+
+
+number_of_genes_sex_analysis <- lapply(names(DVGs$sex), function(x){
+      temp <- DVGs$sex[[x]] %>% filter(significance == "sig")
+      data.frame("celltype" = x, "genes" = nrow(temp), "iter" = "Analysis")
+  }
+)
+
+number_of_genes_sex_analysis <- do.call("rbind", number_of_genes_sex_analysis)
+
+number_genes_sex_across_permutations <- rbind(number_genes_sex_across_permutations, number_of_genes_sex_analysis)
+
+number_genes_sex_across_permutations$type <- ifelse(number_genes_sex_across_permutations$iter == "Analysis", "real", "simulation")
+
+```
+
+## Plot permutation vs ground truth
+
+```{r fig.height=6, fig.width=10}
+number_genes_age_across_permutations.h <- number_genes_age_across_permutations %>% filter(celltype %in% c("CD4_NC", "NK", "CD8_ET", "CD8_NC", "B_IN", "B_MEM", "CD4_ET", "CD8_S100B"))
+number_genes_age_across_permutations.l <- number_genes_age_across_permutations %>% filter(!celltype %in% c("CD4_NC", "NK", "CD8_ET", "CD8_NC", "B_IN", "B_MEM", "CD4_ET", "CD8_S100B"))
+
+a <- ggplot(data = number_genes_age_across_permutations.h, aes(x = celltype, y = genes, colour = type)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) +
+  labs(
+    title = "Permutation vs Real before filtering (age)",
+    color = " "
+  ) +
+  scale_colour_manual(values = c("simulation" = "blue", "real" = "darkred")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.text = element_text(angle = 90, vjust = 1)
+  ) +
+  xlab("") + ylab("")
+
+b <- ggplot(data = number_genes_age_across_permutations.l, aes(x = celltype, y = genes, colour = type)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) +
+  labs(
+    title = "Permutation vs Real before filtering (age)",
+    color = " "
+  ) +
+  scale_colour_manual(values = c("simulation" = "blue", "real" = "darkred")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.text = element_text(angle = 90, vjust = 1)
+  ) +
+  xlab("") + ylab("")
+
+
+number_genes_sex_across_permutations.h <- number_genes_sex_across_permutations %>% filter(celltype %in% c("CD4_NC","CD8_NC"))
+number_genes_sex_across_permutations.l <- number_genes_sex_across_permutations %>% filter(!celltype %in% c("CD4_NC","CD8_NC"))
+
+c <- ggplot(data = number_genes_sex_across_permutations.h, aes(x = celltype, y = genes, colour = type)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) +
+  labs(
+    title = "Permutation vs Real before filtering (sex)",
+    color = " "
+  ) +
+  scale_colour_manual(values = c("simulation" = "blue", "real" = "darkred")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.text = element_text(angle = 90, vjust = 1)
+  ) +
+  xlab("") + ylab("")
+
+d <- ggplot(data = number_genes_sex_across_permutations.l, aes(x = celltype, y = genes, colour = type)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) +
+  labs(
+    title = "Permutation vs Real before filtering (sex)",
+    color = " "
+  ) +
+  scale_colour_manual(values = c("simulation" = "blue", "real" = "darkred")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.text = element_text(angle = 90, vjust = 1)
+  ) +
+  xlab("") + ylab("")
+
+bef_filter <- ggarrange(a,b,c,d, ncol = 2, nrow = 2, common.legend = TRUE)
+
+
+pdf(paste0(img.dir, "permutation_analysis_before_filtering.pdf"), w  = 8, h = 6)
+bef_filter
+dev.off()
+
+bef_filter
+```
+
+# Apply the expression filter to the data---- 
+
+```{r}
+# This is specific for the celltype. In the paper they used 0.3 for CD4nc. Here I will use 0.3 for CD4 and other celltypes
+
+filter_mean_ct <- c(10, 10, 5,30,1.5,2,10,5,30,2,10,30,30,30,2,10) #Manually selected based on the simulation
+names(filter_mean_ct) <- cts_to_study
+```
+
+
+## Filter using celltype specific filters
+```{r}
+#adjusted.pvalues are recomputed
+
+number_genes_age_across_permutations.filtered <- lapply(names(filter_mean_ct), function(x){
+  mean_per_gene <- rowMeans(mean_exps[[x]], na.rm = TRUE)
+  th <- filter_mean_ct[x]
+  genes_to_keep <- names(mean_per_gene[mean_per_gene >= th])
+  genes_in_permutation_after_filtering <- list()
+  for (i in 1:10){
+     DVG_cell <- list_of_permutations[[i]]$age[[x]]
+     DVG_cell <- DVG_cell %>% 
+        filter(gene %in% genes_to_keep) %>% 
+        mutate(p_value_adj_filter = p.adjust(p_value, method = "BH"),
+               significance_after_filter = ifelse(p_value_adj_filter < 0.05, "sig", "non_sig"))
+     genes_in_permutation_after_filtering[[i]] <- data.frame(ct = x, nGene = sum(DVG_cell$p_value_adj_filter < 0.05), iter = i)
+  }
+  do.call("rbind", genes_in_permutation_after_filtering)
+})
+
+number_genes_sex_across_permutations.filtered <- lapply(names(filter_mean_ct), function(x){
+  mean_per_gene <- rowMeans(mean_exps[[x]], na.rm = TRUE)
+  th <- filter_mean_ct[x]
+  genes_to_keep <- names(mean_per_gene[mean_per_gene >= th])
+  genes_in_permutation_after_filtering <- list()
+  for (i in 1:10){
+     DVG_cell <- list_of_permutations[[i]]$sex[[x]]
+     DVG_cell <- DVG_cell %>% 
+        filter(gene %in% genes_to_keep) %>% 
+        mutate(p_value_adj_filter = p.adjust(p_value, method = "BH"),
+               significance_after_filter = ifelse(p_value_adj_filter < 0.05, "sig", "non_sig"))
+     genes_in_permutation_after_filtering[[i]] <- data.frame(ct = x, nGene = sum(DVG_cell$p_value_adj_filter < 0.05), "iter" = i)
+  }
+  do.call("rbind", genes_in_permutation_after_filtering)
+})
+
+
+number_genes_age_across_permutations.filtered <- do.call("rbind", number_genes_age_across_permutations.filtered)
+number_genes_sex_across_permutations.filtered <- do.call("rbind", number_genes_sex_across_permutations.filtered)
+
+
+# Load real data and add it to the table
+DVG.filter <- readRDS("../../results/azimuth_annotation_results/09_explore_DVA_results/1.DVG.group.filter.rds")
+
+number_of_genes_age.filter <- lapply(names(DVG.filter$age), function(x){
+    temp <- DVG.filter$age[[x]] %>% filter(significance_after_filter == "sig")
+    data.frame("ct" = x, "nGene" = nrow(temp), iter = "Real")
+  }
+)
+
+number_of_genes_age.filter <- do.call("rbind", number_of_genes_age.filter)
+number_genes_age_across_permutations.filtered <- rbind(number_genes_age_across_permutations.filtered, number_of_genes_age.filter)
+
+# sex 
+number_of_genes_sex.filter <- lapply(names(DVG.filter$sex), function(x){
+    temp <- DVG.filter$sex[[x]] %>% filter(significance_after_filter == "sig")
+    data.frame("ct" = x, "nGene" = nrow(temp), iter = "Real")
+  }
+)
+
+number_of_genes_sex.filter <- do.call("rbind", number_of_genes_sex.filter)
+number_genes_sex_across_permutations.filtered <- rbind(number_genes_sex_across_permutations.filtered, number_of_genes_sex.filter)
+
+```
+
+
+
+## Plot permutation vs ground truth
+
+```{r fig.height=6, fig.width=10}
+
+number_genes_age_across_permutations.filtered$type <- ifelse(number_genes_age_across_permutations.filtered$iter == "Real", "real", "simulation") 
+
+number_genes_age_across_permutations.filtered.h <- number_genes_age_across_permutations.filtered %>% filter(ct %in% c("CD4_NC", "NK", "CD8_ET", "CD8_NC"))
+number_genes_age_across_permutations.filtered.l <- number_genes_age_across_permutations.filtered %>% filter(!ct %in% c("CD4_NC", "NK", "CD8_ET", "CD8_NC"))
+
+a <- ggplot(data = number_genes_age_across_permutations.filtered.h, aes(x = ct, y = nGene, colour = type)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) +
+  labs(
+    title = "Permutation vs Real before filtering (Age)",
+    color = " "
+  ) +
+  scale_colour_manual(values = c("simulation" = "blue", "real" = "darkred")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.text = element_text(angle = 90, vjust = 1)
+  ) +
+  xlab("") + ylab("")
+
+b <- ggplot(data = number_genes_age_across_permutations.filtered.l, aes(x = ct, y = nGene, colour = type)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) +
+  labs(
+    title = "Permutation vs Real before filtering (age)",
+    color = " "
+  ) +
+  scale_colour_manual(values = c("simulation" = "blue", "real" = "darkred")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.text = element_text(angle = 90, vjust = 1)
+  ) +
+  xlab("") + ylab("")
+
+
+number_genes_sex_across_permutations.filtered$type <- ifelse(number_genes_sex_across_permutations.filtered$iter == "Real", "real", "simulation") 
+
+number_genes_sex_across_permutations.filtered.h <- number_genes_sex_across_permutations.filtered %>% filter(ct %in% c("B_IN", "CD4_NC", "NK", "CD8_ET"))
+number_genes_sex_across_permutations.filtered.l <- number_genes_sex_across_permutations.filtered %>% filter(!ct %in% c("B_IN","CD4_NC", "NK", "CD8_ET"))
+
+
+c <- ggplot(data = number_genes_sex_across_permutations.filtered.h, aes(x = ct, y = nGene, colour = type)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) +
+  labs(
+    title = "Permutation vs Real before filtering (sex)",
+    color = " "
+  ) +
+  scale_colour_manual(values = c("simulation" = "blue", "real" = "darkred")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.text = element_text(angle = 90, vjust = 1)
+  ) +
+  xlab("") + ylab("")
+
+d <- ggplot(data = number_genes_sex_across_permutations.filtered.l, aes(x = ct, y = nGene, colour = type)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) +
+  labs(
+    title = "Permutation vs Real before filtering (sex)",
+    color = " "
+  ) +
+  scale_colour_manual(values = c("simulation" = "blue", "real" = "darkred")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right",
+    axis.text = element_text(angle = 90, vjust = 1)
+  ) +
+  xlab("") + ylab("")
+
+
+
+
+after <- ggarrange(a,b,c,d, ncol = 2, nrow = 2, common.legend = TRUE)
+
+
+pdf(paste0(img.dir, "permutation_analysis_after_filtering.pdf"), w  = 8, h = 6)
+after
+dev.off()
+
+after
+```
